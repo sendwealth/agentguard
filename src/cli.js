@@ -527,5 +527,91 @@ opCmd
     }
   });
 
+// ============ CREDIT SCORE ============
+const creditCmd = program.command('credit').description('Agent credit score system');
+
+creditCmd
+  .command('score <agentId>')
+  .description('Calculate credit score for an agent')
+  .option('-d, --days <days>', 'Number of days to analyze', parseInt, 30)
+  .action(async (agentId, options) => {
+    try {
+      const guard = await createGuard();
+      const score = await guard.getCreditScore(agentId, options.days);
+
+      console.log(chalk.bold(`\n${score.tier.emoji} Credit Score: ${score.score}/100`));
+      console.log(chalk.gray(`Tier: ${score.tier.name} (${score.tier.level})`));
+      console.log(chalk.gray(`Period: ${score.period}`));
+
+      console.log(chalk.bold('\nStatistics:'));
+      console.log(`  Days Active: ${score.stats.daysActive}`);
+      console.log(`  Task Success: ${score.stats.taskSuccess}`);
+      console.log(`  Task Failure: ${score.stats.taskFailure}`);
+      console.log(`  Approvals Granted: ${score.stats.approvalsGranted}`);
+      console.log(`  Approvals Denied: ${score.stats.approvalsDenied}`);
+      console.log(`  Dangerous Ops: ${score.stats.dangerousOps}`);
+
+      console.log(chalk.bold('\nScore Factors:'));
+      for (const factor of score.factors.slice(0, 5)) {
+        const sign = factor.impact >= 0 ? '+' : '';
+        console.log(`  ${factor.factor}: ${sign}${factor.impact}`);
+      }
+    } catch (e) {
+      error(e.message);
+      process.exit(1);
+    }
+  });
+
+creditCmd
+  .command('report <agentId>')
+  .description('Generate full credit report')
+  .option('-d, --days <days>', 'Number of days to analyze', parseInt, 30)
+  .action(async (agentId, options) => {
+    try {
+      const guard = await createGuard();
+      const report = await guard.getCreditReport(agentId, options.days);
+      print(report);
+    } catch (e) {
+      error(e.message);
+      process.exit(1);
+    }
+  });
+
+creditCmd
+  .command('rank')
+  .description('Rank all agents by credit score')
+  .option('-d, --days <days>', 'Number of days to analyze', parseInt, 30)
+  .action(async (options) => {
+    try {
+      const guard = await createGuard();
+      const result = await guard.getAgentRankings(options.days);
+
+      console.log(chalk.bold('\n🏆 Agent Rankings:\n'));
+
+      for (const agent of result.ranking) {
+        const tier = guard.creditScore.getTier(agent.score);
+        console.log(`  ${tier.emoji} #${agent.rank} ${agent.agentId}: ${agent.score}/100 (${tier.level})`);
+      }
+    } catch (e) {
+      error(e.message);
+      process.exit(1);
+    }
+  });
+
+creditCmd
+  .command('compare <agentIds...>')
+  .description('Compare credit scores of multiple agents')
+  .option('-d, --days <days>', 'Number of days to analyze', parseInt, 30)
+  .action(async (agentIds, options) => {
+    try {
+      const guard = await createGuard();
+      const result = await guard.compareCreditScores(agentIds, options.days);
+      print(result.ranking);
+    } catch (e) {
+      error(e.message);
+      process.exit(1);
+    }
+  });
+
 // Parse arguments
 program.parse();

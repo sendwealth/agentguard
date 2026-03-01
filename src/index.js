@@ -11,6 +11,7 @@ const Audit = require('./audit');
 const HumanGate = require('./human-gate');
 const OnePasswordProvider = require('./1password');
 const FeishuNotifier = require('./feishu-notifier');
+const CreditScore = require('./credit-score');
 
 const path = require('path');
 
@@ -91,6 +92,9 @@ class AgentGuard {
     await this.audit.init();
     await this.humanGate.init();
     await this.registry.load();
+
+    // Initialize credit score system
+    this.creditScore = new CreditScore(this.audit, this.registry);
   }
 
   /**
@@ -388,6 +392,38 @@ class AgentGuard {
     if (!this.feishuNotifier) return null;
     return this.feishuNotifier.sendApprovalResult(request, approved, by);
   }
+
+  // ============ Credit Score System ============
+
+  /**
+   * Calculate credit score for an agent
+   */
+  async getCreditScore(agentId, days = 30) {
+    return this.creditScore.calculate(agentId, days);
+  }
+
+  /**
+   * Generate credit report
+   */
+  async getCreditReport(agentId, days = 30) {
+    return this.creditScore.generateReport(agentId, days);
+  }
+
+  /**
+   * Compare credit scores of multiple agents
+   */
+  async compareCreditScores(agentIds, days = 30) {
+    return this.creditScore.compare(agentIds, days);
+  }
+
+  /**
+   * Get all agents ranked by credit score
+   */
+  async getAgentRankings(days = 30) {
+    const agents = await this.listAgents();
+    const agentIds = agents.map(a => a.id);
+    return this.creditScore.compare(agentIds, days);
+  }
 }
 
 // Export components and main class
@@ -399,3 +435,4 @@ module.exports.Audit = Audit;
 module.exports.HumanGate = HumanGate;
 module.exports.OnePasswordProvider = OnePasswordProvider;
 module.exports.FeishuNotifier = FeishuNotifier;
+module.exports.CreditScore = CreditScore;
