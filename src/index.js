@@ -10,6 +10,7 @@ const Scope = require('./scope');
 const Audit = require('./audit');
 const HumanGate = require('./human-gate');
 const OnePasswordProvider = require('./1password');
+const FeishuNotifier = require('./feishu-notifier');
 
 const path = require('path');
 
@@ -20,6 +21,16 @@ class AgentGuard {
 
     // 1Password integration options
     this.use1Password = options.use1Password || process.env.AGENTGUARD_USE_1PASSWORD === 'true';
+
+    // Feishu notification options
+    this.feishuNotifier = null;
+    if (options.feishu || process.env.AGENTGUARD_FEISHU === 'true') {
+      this.feishuNotifier = new FeishuNotifier({
+        openId: options.feishuOpenId || process.env.FEISHU_OPEN_ID,
+        webhookUrl: options.feishuWebhook || process.env.FEISHU_WEBHOOK_URL,
+        useOpenClaw: options.useOpenClaw !== false
+      });
+    }
 
     // Initialize components
     this.vault = new Vault(
@@ -49,8 +60,27 @@ class AgentGuard {
       pendingPath: path.join(basePath, 'pending'),
       timeout: options.timeout || 300,
       channels: options.channels || ['feishu', 'console'],
-      onRequest: options.onRequest
+      onRequest: options.onRequest || this._getDefaultNotifier()
     });
+  }
+
+  /**
+   * Get default notification handler (Feishu if configured)
+   */
+  _getDefaultNotifier() {
+    if (!this.feishuNotifier) return null;
+
+    return async (request, message) => {
+      const payload = await this.feishuNotifier.sendApprovalRequest(request);
+      // Return payload for OpenClaw to send, or send via webhook
+      if (this.feishuNotifier.useOpenClaw) {
+        // Log that we would send to Feishu
+        console.log('\n📱 Feishu notification prepared:');
+        console.log('Target:', payload.target);
+        console.log('Use: message tool to send');
+        return payload;
+      }
+    };
   }
 
   /**
@@ -318,6 +348,46 @@ class AgentGuard {
 
     return this.get1PasswordStatus();
   }
+
+  // ============ Feishu Integration ============
+
+  /**
+   * Enable Feishu notifications
+   */
+  enableFeishu(options = {}) {
+    this.feishuNotifier = new FeishuNotifier({
+      openId: options.openId,
+      webhookUrl: options.webhookUrl,
+      useOpenClaw: options.useOpenClaw !== false
+    });
+
+    // Update HumanGate callback
+    this.humanGate.onRequest = async (request, message) => {
+      const payload = await this.feishuNotifier.sendApprovalRequest(request);
+      return payload;
+    };
+
+    return { enabled: true };
+  }
+
+  /**
+   * Get Feishu notification payload for a request
+   * (for OpenClaw to send via message tool)
+   */
+  async getFeishuPayload(request) {
+    if (!this.feishuNotifier) {
+      throw new Error('Feishu not configured. Call enableFeishu() first');
+    }
+    return this.feishuNotifier.sendApprovalRequest(request);
+  }
+
+  /**
+   * Send approval result to Feishu
+   */
+  async notifyApprovalResult(request, approved, by) {
+    if (!this.feishuNotifier) return null;
+    return this.feishuNotifier.sendApprovalResult(request, approved, by);
+  }
 }
 
 // Export components and main class
@@ -328,3 +398,4 @@ module.exports.Scope = Scope;
 module.exports.Audit = Audit;
 module.exports.HumanGate = HumanGate;
 module.exports.OnePasswordProvider = OnePasswordProvider;
+module.exports.FeishuNotifier = FeishuNotifier;
