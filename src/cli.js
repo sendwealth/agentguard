@@ -613,5 +613,119 @@ creditCmd
     }
   });
 
+// ============ COMPLIANCE ============
+const complianceCmd = program.command('compliance').description('Compliance reporting');
+
+complianceCmd
+  .command('gdpr <agentId>')
+  .description('Generate GDPR compliance report')
+  .option('-d, --days <days>', 'Number of days to analyze', parseInt, 90)
+  .action(async (agentId, options) => {
+    try {
+      const guard = await createGuard();
+      const report = await guard.getGDPRReport(agentId, { days: options.days });
+
+      console.log(chalk.bold('\n📋 GDPR Compliance Report\n'));
+      console.log(`Agent: ${agentId}`);
+      console.log(`Generated: ${report.generatedAt}`);
+      console.log(`\nCompliance Score: ${report.summary.complianceScore}/100`);
+
+      console.log(chalk.bold('\nData Processing:'));
+      console.log(`  Total Activities: ${report.summary.totalProcessingActivities}`);
+      console.log(`  Data Subjects: ${report.summary.uniqueDataSubjects}`);
+
+      console.log(chalk.bold('\nConsent:'));
+      console.log(`  Records: ${report.summary.consentRecords}`);
+      console.log(`  Coverage: ${report.consent.coverage}%`);
+
+      if (report.risks.length > 0) {
+        console.log(chalk.bold('\n⚠️  Risks:'));
+        for (const risk of report.risks.slice(0, 3)) {
+          console.log(`  [${risk.level.toUpperCase()}] ${risk.description}`);
+        }
+      }
+
+      if (report.recommendations.length > 0) {
+        console.log(chalk.bold('\n📝 Recommendations:'));
+        for (const rec of report.recommendations.slice(0, 3)) {
+          console.log(`  [${rec.priority.toUpperCase()}] ${rec.action}`);
+        }
+      }
+    } catch (e) {
+      error(e.message);
+      process.exit(1);
+    }
+  });
+
+complianceCmd
+  .command('ccpa <agentId>')
+  .description('Generate CCPA compliance report')
+  .option('-d, --days <days>', 'Number of days to analyze', parseInt, 90)
+  .action(async (agentId, options) => {
+    try {
+      const guard = await createGuard();
+      const report = await guard.getCCPAReport(agentId, { days: options.days });
+
+      console.log(chalk.bold('\n📋 CCPA Compliance Report\n'));
+      console.log(`Agent: ${agentId}`);
+      console.log(`Generated: ${report.generatedAt}`);
+      console.log(`\nCompliance Score: ${report.summary.complianceScore}/100`);
+
+      console.log(chalk.bold('\nData Sales:'));
+      console.log(`  Activities: ${report.summary.dataSales}`);
+      console.log(`  Opt-out Mechanism: ${report.dataSales.optOutMechanism ? 'Yes' : 'No'}`);
+
+      console.log(chalk.bold('\nConsumer Rights:'));
+      console.log(`  Requests: ${report.summary.consumerRequests}`);
+      console.log(`  Fulfillment Rate: ${report.consumerRights.fulfillment.rate}%`);
+
+      if (report.risks.length > 0) {
+        console.log(chalk.bold('\n⚠️  Risks:'));
+        for (const risk of report.risks.slice(0, 3)) {
+          console.log(`  [${risk.level.toUpperCase()}] ${risk.description}`);
+        }
+      }
+    } catch (e) {
+      error(e.message);
+      process.exit(1);
+    }
+  });
+
+complianceCmd
+  .command('full <agentId>')
+  .description('Generate full compliance report (GDPR + CCPA)')
+  .option('-d, --days <days>', 'Number of days to analyze', parseInt, 90)
+  .action(async (agentId, options) => {
+    try {
+      const guard = await createGuard();
+      const report = await guard.getFullComplianceReport(agentId, { days: options.days });
+
+      console.log(chalk.bold('\n📋 Full Compliance Report\n'));
+      console.log(`Agent: ${agentId}`);
+      console.log(`Generated: ${report.generatedAt}`);
+      console.log(`\nOverall Score: ${report.overallScore}/100`);
+
+      console.log(chalk.bold('\nGDPR Score:'), report.gdpr.summary.complianceScore);
+      console.log(chalk.bold('CCPA Score:'), report.ccpa.summary.complianceScore);
+
+      if (report.allRisks.length > 0) {
+        console.log(chalk.bold('\n⚠️  All Risks:'));
+        for (const risk of report.allRisks.slice(0, 5)) {
+          console.log(`  [${risk.level.toUpperCase()}] ${risk.description}`);
+        }
+      }
+
+      if (report.allRecommendations.length > 0) {
+        console.log(chalk.bold('\n📝 All Recommendations:'));
+        for (const rec of report.allRecommendations.slice(0, 5)) {
+          console.log(`  [${rec.priority.toUpperCase()}] ${rec.action}`);
+        }
+      }
+    } catch (e) {
+      error(e.message);
+      process.exit(1);
+    }
+  });
+
 // Parse arguments
 program.parse();

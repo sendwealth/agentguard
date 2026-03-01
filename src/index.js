@@ -12,6 +12,7 @@ const HumanGate = require('./human-gate');
 const OnePasswordProvider = require('./1password');
 const FeishuNotifier = require('./feishu-notifier');
 const CreditScore = require('./credit-score');
+const ComplianceReporter = require('./compliance-reporter');
 
 const path = require('path');
 
@@ -95,6 +96,9 @@ class AgentGuard {
 
     // Initialize credit score system
     this.creditScore = new CreditScore(this.audit, this.registry);
+
+    // Initialize compliance reporter
+    this.complianceReporter = new ComplianceReporter(this.audit, this.registry, this.scope);
   }
 
   /**
@@ -424,6 +428,49 @@ class AgentGuard {
     const agentIds = agents.map(a => a.id);
     return this.creditScore.compare(agentIds, days);
   }
+
+  // ============ Compliance Reporting ============
+
+  /**
+   * Generate GDPR compliance report
+   */
+  async getGDPRReport(agentId, options = {}) {
+    return this.complianceReporter.gdprReport(agentId, options);
+  }
+
+  /**
+   * Generate CCPA compliance report
+   */
+  async getCCPAReport(agentId, options = {}) {
+    return this.complianceReporter.ccpaReport(agentId, options);
+  }
+
+  /**
+   * Generate full compliance report (GDPR + CCPA)
+   */
+  async getFullComplianceReport(agentId, options = {}) {
+    const [gdpr, ccpa] = await Promise.all([
+      this.getGDPRReport(agentId, options),
+      this.getCCPAReport(agentId, options)
+    ]);
+
+    return {
+      agentId,
+      generatedAt: new Date().toISOString(),
+      gdpr,
+      ccpa,
+      overallScore: Math.round((gdpr.summary.complianceScore + ccpa.summary.complianceScore) / 2),
+      allRisks: [...gdpr.risks, ...ccpa.risks].sort((a, b) => {
+        const order = { high: 0, medium: 1, low: 2 };
+        return order[a.level] - order[b.level];
+      }),
+      allRecommendations: [...gdpr.recommendations, ...ccpa.recommendations]
+        .sort((a, b) => {
+          const order = { high: 0, medium: 1, low: 2 };
+          return order[a.priority] - order[b.priority];
+        })
+    };
+  }
 }
 
 // Export components and main class
@@ -436,3 +483,4 @@ module.exports.HumanGate = HumanGate;
 module.exports.OnePasswordProvider = OnePasswordProvider;
 module.exports.FeishuNotifier = FeishuNotifier;
 module.exports.CreditScore = CreditScore;
+module.exports.ComplianceReporter = ComplianceReporter;
